@@ -1,16 +1,27 @@
 ### Operacion 🔧
 
-_Procesing Template File:
+_ Procesing Template File:
+
+The Template File must be in the same local Diretory as the execution of the Containers.
 
 ```
-docker run -v $(pwd):/usr/app/template vmasuero/nfvi_processor:1.0 <file>.xlsx
+For Linux:
+	docker run -v $(pwd):/usr/app/template vmasuero/nfvi_processor:1.0 <file>.xlsx
+
+For Windows:
+	docker run -v %cd%:/usr/app/template vmasuero/nfvi_processor:1.0 <file>.xlsx
 ```
 
 
 
-_Deploying DashBoad Web:
+_ Deploying DashBoad Web:
 
 ```
-docker run -v $(pwd):/usr/app/template -p 8151:8151 vmasuero/nfvi_dashboard:1.0 <file>.json
+For Linux:
+	docker run -v $(pwd):/usr/app/template -p 8151:8151 vmasuero/nfvi_dashboard:1.0 <file>.json
+
+For Windows:
+	docker run -v %cd%:/usr/app/template -p 8151:8151 vmasuero/nfvi_dashboard:1.0 <file>.json
+
 ```
 
