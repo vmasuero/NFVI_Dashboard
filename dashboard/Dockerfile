@@ -7,6 +7,7 @@ WORKDIR /usr/app/src
 RUN pip3 install pandas
 RUN pip3 install numpy
 RUN pip install dash
+RUN pip install openpyxl
 RUN pip3 install dash-bootstrap-components
 
 COPY COLORS.py ./

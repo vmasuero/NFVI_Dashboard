@@ -638,7 +638,7 @@ if __name__ == '__main__':
             _res_output[1] = dcc.send_data_frame(create_file_vms().to_excel, "vms_report_%s.xlsx"%randint(1,1000), sheet_name="VMs")
 
         if 'btn_template_xlsx' in changed_id:
-            _res_output[2] =  dcc.send_file("./"+FILE.replace('.json','.xlsx'))
+            _res_output[2] =  dcc.send_file(file_path.replace('.json','.xlsx'))
 
         if 'btn_logs_xlsx' in changed_id:
             _res_output[3] = dcc.send_data_frame(create_logs_file().to_excel, "logs_report_%s.xlsx"%randint(1,1000), sheet_name="Logs")        

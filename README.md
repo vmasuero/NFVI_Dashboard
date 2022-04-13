@@ -1,8 +1,16 @@
 ### Operacion 🔧
 
-_Para el procesamiento del template en Excel:
+_Procesing Template File:
 
 ```
-docker run -v $(pwd):/usr/app/template -p 8154:8151 nfvi_dashboard:1.0 template_nfvi_report_20220316_v3.6.json
+docker run -v $(pwd):/usr/app/template vmasuero/nfvi_processor:1.0 <file>.xlsx
+```
+
+
+
+_Deploying DashBoad Web:
+
+```
+docker run -v $(pwd):/usr/app/template -p 8151:8151 vmasuero/nfvi_dashboard:1.0 <file>.json
 ```
 
