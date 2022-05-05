@@ -18,10 +18,10 @@ _ Deploying DashBoad Web:
 
 ```
 For Linux:
-	docker run -v $(pwd):/usr/app/template -p 8151:8151 vmasuero/nfvi_dashboard:1.2 <file>.json
+	docker run -v $(pwd):/usr/app/template -p 8151:8151 vmasuero/nfvi_dashboard:1.3 <file>.json
 
 For Windows:
-	docker run -v %cd%:/usr/app/template -p 8151:8151 vmasuero/nfvi_dashboard:1.2 <file>.json
+	docker run -v %cd%:/usr/app/template -p 8151:8151 vmasuero/nfvi_dashboard:1.3 <file>.json
 
 ```
 

@@ -13,7 +13,7 @@ import argparse
 from collections import defaultdict
 
 
-# In[4]:
+# In[2]:
 
 
 #from jupyter_dash import JupyterDash
@@ -42,7 +42,7 @@ import os
 from COLORS import COLORS 
 
 
-# In[6]:
+# In[3]:
 
 
 ######## PRESENTATION #################################
@@ -78,7 +78,6 @@ def write_title(text, size):
 def create_cards(task_name, datacenter):
     #DEV4
     _avz_data = AVZ_TABLES[task_name]
-    #_avz_data = _avz_data[ _avz_data.index.str.find(datacenter) > 0 ]
     _avz_data = _avz_data[ _avz_data.datacenter == datacenter]
     
     _server_data = SERVERS_TABLES[task_name]
@@ -108,7 +107,7 @@ def create_cards(task_name, datacenter):
                 'bg_color': '#D3DEDC'
             },
             'Servidores':  {
-                'value':_avz_data.number_servers.sum(),
+                'value':_avz_data.number_servers.sum() - len(_server_data[_server_data.server.str.match(r'vserver_auto(.*)')].groupby('server').count()),
                 'suffix':" units",
                 'bg_color':'#92A9BD'
             },
@@ -269,7 +268,8 @@ def create_content_home(task_name):
     return html.Div(CONTENT,className="p-1 bg-light rounded-3")
 
 
-# In[7]:
+
+# In[4]:
 
 
 ######### SIMULATIONS PAGE  #################
@@ -376,7 +376,7 @@ def create_content_simulations():
    
 
 
-# In[8]:
+# In[5]:
 
 
 ######### TETRIS PAGE  #################
@@ -485,7 +485,7 @@ def create_content_tetris(task_name):
     return html.Div(TETRIS_CONTENT,className="p-1 bg-light rounded-3")
 
 
-# In[12]:
+# In[6]:
 
 
 def create_header(task_name):
@@ -503,7 +503,8 @@ def create_header(task_name):
 
 
 
-# In[ ]:
+
+# In[7]:
 
 
 parser = argparse.ArgumentParser(description='Processor of Template - NFVI Report')
