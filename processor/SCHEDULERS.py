@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[1]:
@@ -59,9 +59,29 @@ class Scheduler:
         self.logger.log_msg('DEPLOY_SERVER','OK',"Server deployed: %s"%server.name)
         return True
     
+    def remove_server(self, server:str):
+        _server = self.get_server_by_name(server)
+       
+        if _server == None:
+            print("Server not found: %s"%server)
+            self.logger.log_msg('REMOVE_SERVER','NOK','Server %s removed, not found'%server)
+            return False
+            
+        _server.status = 'not_deployed'
+        self.servers_status_q.put(('DELETE',_server.get_info()))
+        
+
+        for k,_vm in _server.vms.items():
+            self.vms_status_q.put(('DELETE',_vm.get_info()))
+            del _vm
+
+        self.servers.pop(_server.id)
+        self.logger.log_msg('REMOVE_SERVER','OK','Server %s removed'%server)
+     
+        return True
+    
     def deploy_vm(self, server: Server, vm: VM):
 
-        #_server = self.get_server_by_name(server)
         if server.get_vm_by_name(vm.name):
             print("ERROR: Deploying VM, VM already exsist %s"%vm.name)
             self.logger.log_msg('DEPLOY_VM','NOK',"Deploying VM: VM  not exist: %s"%vm.name)
@@ -72,8 +92,7 @@ class Scheduler:
             self.servers_status_q.put(('UPDATE',server.get_info()))
 
             for k,_vm in server.vms.items():
-                self.vms_status_q.put(('DELETE',_vm.get_info()))
-                self.vms_status_q.put(('CREATE',_vm.get_info()))
+                self.vms_status_q.put(('UPDATE',_vm.get_info()))
 
             self.logger.log_msg('DEPLOY_VM','OK',"Deploying VM %s deployed in Server %s"%(vm.name,server))
             return True
@@ -81,10 +100,29 @@ class Scheduler:
         self.logger.log_msg('DEPLOY_VM','NOK'," NO resources Deploying VM %s deployed in Server %s"%(vm.name,server))
         return False
     
-    def get_vm_by_name(self, name: str):
+    def remove_vm(self, vm: str):  
+        _vm = self.get_vm_by_name(vm)
+        
+        if _vm:
+            _server = _vm.server_deployed
+            _server.remove_vm(vm)
+        
+            self.vms_status_q.put(('DELETE',_vm.get_info()))
+            self.servers_status_q.put(('UPDATE',_server.get_info()))
+            self.logger.log_msg('REMOVE_VM','OK',"VM removed: %s"%vm)
+            print("VM removed: %s from Server %s"%(vm, _server.name))
+            return True
+        
+        self.logger.log_msg('REMOVE_VM','NOK',"VM not found: %s"%vm)
+        print("WARNING:  VM not found: %s"%vm)
+        return False
+    
+   
+    
+    def get_vm_by_name(self, vm: str):
         
         for k,_server in self.servers.items():
-            _vm_found = _server.get_vm_by_name(name)
+            _vm_found = _server.get_vm_by_name(vm)
             if _vm_found:
                 return _vm_found
             
@@ -122,20 +160,22 @@ class Scheduler:
                 self.vms_status_q.put(('CREATE',_vm.get_info()))
                 
         return True
-            
-        
+    
+    
     def get_servers_status(self):
       
         while not self.servers_status_q.empty():
             _cmd, _reg = self.servers_status_q.get()
-                          
+                     
             if (_cmd == 'UPDATE') | (_cmd == 'DELETE'):
-                self.servers_status = self.servers_status[self.servers_status.id != _reg.id.max()]
+                #self.servers_status = self.servers_status[self.servers_status.id != _reg.id.max()]
+                self.servers_status = self.servers_status[self.servers_status.server != _reg.server.max()]
                 
                 
             if (_cmd == 'UPDATE') | (_cmd == 'CREATE'):
                 self.servers_status  = pd.concat([self.servers_status,_reg], ignore_index=True)
-                
+
+        
         return self.servers_status.reset_index(drop=True).astype({
             'vcpus': int, 
             'vcpus_reserved': int,
@@ -149,16 +189,17 @@ class Scheduler:
 
         
     def get_vms_status(self):
-       #
+       
         while not self.vms_status_q.empty():
             _cmd, _reg = self.vms_status_q.get()
   
-                     
-            if (_cmd == 'DELETE') & (self.vms_status.empty == False):
-                self.vms_status = self.vms_status[self.vms_status.vm != _reg.vm.max()]
+            
+            if self.vms_status.empty == False:
+                if (_cmd == 'UPDATE') | (_cmd == 'DELETE'):
+                    self.vms_status = self.vms_status[self.vms_status.vm != _reg.vm.max()]
+
                 
-                
-            if _cmd == 'CREATE':
+            if (_cmd == 'UPDATE') | (_cmd == 'CREATE'):
                 self.vms_status  = pd.concat([self.vms_status,_reg], ignore_index=True)
 
 
@@ -169,56 +210,8 @@ class Scheduler:
         })
 
     
-    
-    def remove_server(self, server:str):
-        _server = self.get_server_by_name(server)
-        
-        if _server == None:
-            self.logger.log_msg('REMOVE_SERVER','NOK','Server %s removed, not found'%server)
-            return False
-            
-        _server.status = 'not_deployed'
-        
-        self.servers_status_q.put(('DELETE',_server.get_info()))
-        
-        if _server:
-            for k,_vm in _server.vms.items():
-                self.vms_status_q.put(('DELETE',_vm.get_info()))
-                del _vm
-
-            self.servers.pop(_server.id)
-            self.logger.log_msg('REMOVE_SERVER','OK','Server %s removed'%server)
-            return True
-    
-        print("WARNING:  Server not found: %s"%_server)
-        self.logger.log_msg('REMOVE_SERVER','NOK',"Server not found: %s"%_server)
-        return False
-    
-
-    def remove_vm(self, vm: str):       
-        _vms_status = self.get_vms_status()
-        server_deployed = _vms_status.loc[_vms_status['vm'] == vm,'server_deployed']
-
-        if not server_deployed.empty:           
-            server_deployed = server_deployed.values[0]
-            _server = self.get_server_by_name(server_deployed)
-       
-            _vm = _server.get_vm_by_name(vm) 
-            _server.remove_vm(vm)
-
-            self.vms_status_q.put(('DELETE',_vm.get_info()))
-            self.servers_status_q.put(('UPDATE',_server.get_info()))
-            self.logger.log_msg('REMOVE_VM','OK',"VM removed: %s"%vm)
-            print("VM removed: %s from Server %s"%(vm, _server.name))
-            return True
-        
-        self.logger.log_msg('REMOVE_VM','NOK',"VM not found: %s"%vm)
-        print("WARNING:  VM not found: %s"%vm)
-        return False
-    
-    
     def rank_server_for_vm(self, vm: VM):
-
+        
         if len(self.servers) == 0:
             self.logger.log_msg('RANK_SERVER','INFO',"No Servers to deploy VM: %s "%vm.name)
             return -1, pd.DataFrame([-1], columns=['rank'])
@@ -228,13 +221,16 @@ class Scheduler:
         _status_servers['selected'] = False
         
         ###### CHECK AVAILABILITY ZONE##################################
-        #_status_servers.loc[_status_servers.avz != vm.avz,'rank'] -= 100
+
         _status_servers = _status_servers[ _status_servers.avz == vm.avz ] 
-        #if len(_status_servers[_status_servers.avz == vm.avz]) == 0:
+
         if _status_servers.empty:
             print("AVZ not available:  %s"%vm.avz)
             self.logger.log_msg('RANK_SERVER','NOK',"No AVZ: %s to deploy VM:%s "%(vm.avz,vm.name))
             return -1, _status_servers
+        
+        
+        
         
         _status_vms = self.get_vms_status()
         ###### CHECK ANTIAFFINITY y AFFINITY #########################
@@ -252,14 +248,19 @@ class Scheduler:
 
         ###### NODE SELECTED ###############################
         if vm.node_select != 'NO_NODE_SELECT':
-            _status_servers.loc[_status_servers['server'] == vm.node_select,'rank'] +=30
+            _status_servers.loc[_status_servers['server'] == vm.node_select,'rank'] += 300
             
         ###### RESOURCES CPU ########################################
+        #if vm.node_select == 'p-cllry01-csu-2038':
+        #    display(vm.flavor.vcpus)
+        #    display(_status_servers.loc[_status_servers['server'] == 'p-cllry01-csu-2038'])
+        
         _status_servers.loc[ _status_servers['vcpus_free'].apply(lambda x: x < vm.flavor.vcpus) ,'rank'] -= 100
         _status_servers.loc[ _status_servers['vcpus_free'].apply(lambda x: x >= vm.flavor.vcpus) ,'rank'] += 30
 
         if _status_servers[_status_servers['rank'] >= -5].empty:
             print("No existen candidatos para desplegar VM")
+            display(_status_servers)
             self.logger.log_msg('RANK_SERVER','NOK',"No existen candidatos para desplegar VM:%s "%vm.name)
 
             return -1, _status_servers
@@ -269,12 +270,6 @@ class Scheduler:
         _status_servers = _status_servers[_status_servers['vcpus_free'] == _status_servers['vcpus_free'].max()] 
 
         _server_selected = _status_servers.loc[_status_servers['rank'].idxmax()] 
-        
-
-        ###### DEBUG
-        #if _server_selected == 'vserver_auto_207':
-            #display(_status_servers)
-        #    pass
         
         _status_servers.loc[_status_servers['server'] == _server_selected['server'], 'selected'] = True
         
@@ -342,158 +337,9 @@ class Scheduler:
         return _new_sch
 
 
-# In[3]:
+
+# In[ ]:
 
 
-if False:
-    from SERVERS import Server,Type_Server
-    from VMs import VM, Flavor_VM
-    
-    SERVERS_TYPE = []
-    SERVERS_TYPE.append(Type_Server(0,2,20,6,True,2048))
-    display(SERVERS_TYPE[0].get_info())
-    
-    FLAVORS_VM = []
-    FLAVORS_VM.append(Flavor_VM(0, 8, 2048))
-    FLAVORS_VM.append(Flavor_VM(1, 10, 2048))
-    FLAVORS_VM.append(Flavor_VM(2, 16, 2048))
 
-    
-    DEFAULT_SERVER = Server('default_S',SERVERS_TYPE[0], avz='default1', datacenter='liray', virtual=True)
-    DEFAULT_SERVER_2 = Server('default_S',SERVERS_TYPE[0], avz='default1', datacenter='Corp', virtual=True)
-    
-    SCH = Scheduler('test', DEFAULT_SERVER)
-
-    
-    SERVERS = []
-    SERVERS.append(Server('server_1',SERVERS_TYPE[0], avz='lry_default', datacenter='liray', virtual=True))
-    SERVERS.append(Server('server_2',SERVERS_TYPE[0], avz='corp_default', datacenter='Corp', virtual=True))
-    SERVERS.append(Server('server_3',SERVERS_TYPE[0], avz='lry_default_1', datacenter='liray', virtual=True))
- 
-    for _server in SERVERS:
-        SCH.deploy_server( _server )
-    
-    VMS = [
-        VM('vm4_1','comp1','vnf', Flavor_VM(4, 4, 2048), avz='default1'),
-        VM('vm16_1','comp1','vnf', Flavor_VM(16, 16, 2048), avz='default1'),
-        VM('vm16_2','comp1','vnf', Flavor_VM(16, 16, 2048), avz='default1'),
-        VM('vm14_1','comp3','vnf', Flavor_VM(14, 14, 2048), avz='default2'),
-        VM('vm12_1','comp3','vnf', Flavor_VM(12, 12, 2048), avz='default2'),
-        VM('vm6_1','comp3','vnf', Flavor_VM(6, 6, 2048), avz='default1'),
-    ]
-    
-    VMS = []
-    VMS.append( VM('VM14_1','BGF_VM','BGF', Flavor_VM(14, 14, 2048), avz='lry_default', datacenter='LRY'))
-    VMS.append( VM('VM14_2','CSCF_VM','CSCF', Flavor_VM(14, 14, 2048), avz='lry_default', datacenter='LRY'))
-    VMS.append( VM('VM14_3','MSCLRY1_BC','MSC', Flavor_VM(14, 14, 2048), avz='lry_default', datacenter='LRY'))
-    VMS.append( VM('VM16_1','MSCLRY1_BC','MSC', Flavor_VM(16, 16, 2048), avz='lry_default', datacenter='LRY'))
-    VMS.append( VM('VM2_1','MSCLRY1_BC','MSC', Flavor_VM(2, 2, 2048), avz='lry_default', datacenter='LRY'))
-    VMS.append( VM('VM2_2','MSCLRY1_BC','MSC', Flavor_VM(2, 2, 2048), avz='lry_default', datacenter='LRY'))
-    VMS.append( VM('VM6_1','MSCLRY1_BC','MSC', Flavor_VM(6, 6, 2048), avz='lry_default', datacenter='LRY'))
-    VMS.append( VM('VM6_2','MSCLRY1_BC','MSC', Flavor_VM(6, 6, 2048), avz='lry_default', datacenter='LRY'))
-    
-    print()
-    print()
-    for i,vm in enumerate(VMS):
-        print("deploying %s"%vm.name)
-        #print(i%2)
-        #SCH.deploy_vm(SERVERS[i%2].name ,vm)
-        
-        _idx, _table = SCH.rank_server_for_vm(vm)
-            #print("IDX %s"%_idx)
-        if _idx >= 0:
-            print("Servidor elegido:")
-            display(_table)
-            print()
-            if SCH.deploy_vm(SERVERS[_idx] ,vm):
-                print("OK ................Deployando directamente en el server..................OK")
-            else:
-                print("NOK..........no Deployado")
-
-            display(SCH.get_servers_status())
-            display(SCH.get_vms_status())
-            print()
-            print()
-            print()
-            print()
-        else:
-            print("No hay recursos")
-        #get_server_by_name
-        
-    print()
-    print("######################################################################################")
-    print("######################################################################################")
-    print("######################################################################################")
-    ffffffffffffffffffffffffffffffffff
-    
-    display(SCH.get_status_by_avz())
-    display(SCH.get_servers_status())
-    display(SCH.get_vms_status())
-    
-    fffffffffffffffffffffffffffff
-
-
-# In[4]:
-
-
-if False:
-    from SERVERS import Server,Type_Server
-    from VMs import VM, Flavor_VM
-    
-    SERVERS_TYPE = []
-    SERVERS_TYPE.append(Type_Server(0,2,20,6,True,2048))
-    
-    FLAVORS_VM = []
-    FLAVORS_VM.append(Flavor_VM(0, 2, 2048))
-    
-    DEFAULT_SERVER = Server('default_S',SERVERS_TYPE[0], avz='default1', datacenter='liray', virtual=True)
-    DEFAULT_SERVER_2 = Server('default_S',SERVERS_TYPE[0], avz='default1', datacenter='liray', virtual=True)
-    
-    SCH = Scheduler('test', DEFAULT_SERVER)
-    #SERVERS_TYPE[0].cores = 3
-    
-    SERVERS = []
-    for i in range(1):
-        SERVERS.append(Server('server_'+str(i),SERVERS_TYPE[0], avz='default1', datacenter='liray', virtual=True))
-        
-
-    for _server in SERVERS:
-        SCH.deploy_server(_server)
-    
-    VMS = [
-        VM('vm_1','comp1','vnf', FLAVORS_VM[0], avz='default1', affinity=['comp11','comp13'], antiaffinity=['comp11','comp3']),
-        VM('vm_2','comp1','vnf', FLAVORS_VM[0], avz='default1', affinity=['comp11','comp13'], antiaffinity=['comp11','comp3']),
-        VM('vm_3','comp1','vnf', FLAVORS_VM[0], avz='default1', affinity=['comp11','comp13'], antiaffinity=['comp11','comp3']),
-        VM('vm_4','comp3','vnf', FLAVORS_VM[0], avz='default1', affinity=['comp11','comp13'], antiaffinity=['comp1','comp13']),
-        VM('vm_5','comp3','vnf', FLAVORS_VM[0], avz='default1', affinity=['comp11','comp13'], antiaffinity=['comp1','comp13']),
-        VM('vm_6','comp3','vnf', FLAVORS_VM[0], avz='default1', affinity=['comp11','comp13'], antiaffinity=['comp1','comp13']),
-        VM('vm_7','comp3','vnf', FLAVORS_VM[0], avz='default1', affinity=['comp11','comp13'], antiaffinity=['comp1','comp13']),
-        VM('vm_8','comp3','vnf', FLAVORS_VM[0], avz='default1', affinity=['comp11','comp13'], antiaffinity=['comp1','comp13']),
-    ]
-    
-    print('\n\n')
-    TRY = 3
-    for _vm in VMS:
-        _try = 0
-        
-        idx,rank = SCH.rank_server_for_vm(_vm)
-  
-        if idx < 0:
-            _server = SCH.create_default_server(avz='default1',datacenter='google')
-        else:
-            _server = SCH.get_server_by_id(idx)
-            
-        SCH.deploy_vm(_server.name ,_vm)
-
-
-    print(SCH.remove_vm('vm_1'))
-    print("#####################")
-    display(SCH.get_servers_status())
-    display(SCH.get_vms_status())
-    SCH1 = SCH.get_copy()
-    print()
-    print()
-    display(SCH1.get_servers_status())
-    display(SCH1.get_vms_status())
-    display(SCH.logger.get_info())
 

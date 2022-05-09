@@ -140,10 +140,10 @@ class G_Tasks(nx.DiGraph):
 
         _sch = self.get_scheduler(task_name)
         _tasks_vms = self.vms_tasks[self.vms_tasks['Task_Name'] == task_name]
-        
         num_vms = len(_tasks_vms)
+        
         for i,(k,cmd_v) in enumerate(_tasks_vms.iterrows()):
-            #clear_output(wait=True)
+
             print("SCHEDULER VM: %s VM: %s EXC: %s AVZ: %s  NODE_SELECT: %s ..........%d of %d"%(_sch.name, cmd_v.Vm_Name, cmd_v.Task_Action, cmd_v.Avz,cmd_v.Hostname, i+1,num_vms))
             
             if cmd_v.Task_Action == 'DELETE_ALL':
@@ -159,37 +159,9 @@ class G_Tasks(nx.DiGraph):
                         self.logger.log_msg('EXEC_VMS_TASKS_DELETE_ALL','NOK',"VM NOT deleted %s"%(v.vm))
                         
               
-            if cmd_v.Task_Action == 'C1REATE':
-                if _sch.get_vm_by_name(cmd_v.Vm_Name) != None:
-                    print("This VM Already exist: %s"%cmd_v.Vm_Name)
-                    self.logger.log_msg('EXEC_VMS_CREATE','NOK',"This VM Already exist: %s"%cmd_v.Vm_Name)
-                    continue
                     
-                _cluster_id, _status, _vm = deploy_vm_try(_sch, cmd_v)
-                
-                try_deploy = 0
-                while (_cluster_id < 0) & (try_deploy < tries):
-                    df_server = _sch.create_default_server(avz=cmd_v.Avz, datacenter=cmd_v.Datacenter)
-                    print("No enough resources, needed %d, creating Default Server: %s"%(_vm.flavor.vcpus,df_server.name))
-                    print("Try %d"%try_deploy)
-                    self.logger.log_msg('EXEC_VMS_CREATE','NOK',"No enough resources, needed %d, creating Default Server: %s"%(_vm.flavor.vcpus,df_server.name))
-                    
-                    _cluster_id, _status, _vm = deploy_vm_try(_sch, cmd_v)
-
-                    try_deploy += 1
-
-                if _cluster_id >= 0:
-                    print("Deployed VM: %s in Server: %s \r"%(_vm.name, _sch.servers[_cluster_id].name), end='')
-                    self.logger.log_msg('EXEC_VMS_CREATE','OK',"Resources  %d found, in server id: %s"%(_vm.flavor.vcpus,_cluster_id))
-                    if not _sch.deploy_vm(_sch.servers[_cluster_id].name,_vm):
-                        print("ERROR:   en %s"%_sch.servers[_cluster_id].name)
-                else:
-                    print("Could not Deployed VM: %s"%_vm.name)
-                    self.logger.log_msg('EXEC_VMS_CREATE','OK',"Resources  %d vcpus not found"%(_vm.flavor.vcpus))
-                    
-            #### DEV100   
             if cmd_v.Task_Action == 'CREATE':
-                try_deploy = 0
+             
                 _vm = VM(
                     cmd_v.Vm_Name,
                     cmd_v.Component,
@@ -204,27 +176,16 @@ class G_Tasks(nx.DiGraph):
                 
                 _id, _status = _sch.rank_server_for_vm(_vm)
                 
-                while (_id < 0) & (try_deploy < tries):
+                if _id < 0:
                     df_server = _sch.create_default_server(avz=cmd_v.Avz, datacenter=cmd_v.Datacenter)
                     print("No enough resources, needed %d, creating Default Server: %s"%(_vm.flavor.vcpus,df_server.name))
-                    print("Try %d"%try_deploy)
                     self.logger.log_msg('EXEC_VMS_CREATE','NOK',"No enough resources, needed %d, creating Default Server: %s"%(_vm.flavor.vcpus,df_server.name))
-                    
-                    _id, _status = _sch.rank_server_for_vm(_vm)
-                    try_deploy += 1
-                
-                if _id >= 0:
+                    _sch.deploy_vm(df_server,_vm)
+                else:
                     print("Deployed VM: %s in Server: %s \r"%(_vm.name, _sch.servers[_id].name), end='')
                     self.logger.log_msg('EXEC_VMS_CREATE','OK',"Resources  %d found, in server id: %s"%(_vm.flavor.vcpus,_id))
-                    
-                    if not _sch.deploy_vm(_sch.servers[_id],_vm):
-                        print("ERROR: Incongruencia con server  %s y VM %s"%(_sch.servers[_id].name,_vm.name))
-                        print(_status)
-                else:
-                    print("Could not Deployed VM: %s"%_vm.name)
-                    self.logger.log_msg('EXEC_VMS_CREATE','OK',"Resources  %d vcpus not found"%(_vm.flavor.vcpus))
-                    
-            
+                    _sch.deploy_vm(_sch.servers[_id],_vm)
+                        
             
             if cmd_v.Task_Action == 'DELETE':   
                 if _sch.remove_vm(cmd_v.Vm_Name):
@@ -235,7 +196,7 @@ class G_Tasks(nx.DiGraph):
                     self.logger.log_msg('EXEC_VMS_DELETE','NOK',"VM NOT deleted %s"%(cmd_v.Vm_Name))
 
 
-# In[3]:
+# In[4]:
 
 
 def format_server_df(file):
@@ -313,8 +274,51 @@ def exec_tasks(tasks, task_name):
     for _sucessor in tasks.successors(task_name):
         exec_tasks(tasks, _sucessor) 
 
+if False:
+    file_path = "../template_nfvi_report_20220503_v3.7.xlsx"
+    
+    print("reading FILE: Servers Types")
+    SERVER_TYPES = format_server_types(file_path)
 
-# In[4]:
+    print("reading FILE: Flavors VMs")
+    FLAVORS_VM = format_flavors_df(file_path)
+
+    print("reading FILE: Servers")
+    SERVERS_DF = format_server_df(file_path)
+
+    print("reading FILE: VMs")
+    VMS_DF = format_vms_df(file_path)
+
+
+    print("reading FILE: Tasks")
+    TASKS_DF = format_task_df(file_path)
+
+    DEFAULT_SERVER = Server('default_server',SERVER_TYPES[0],'default', 'default', virtual=True)
+    
+    TASKS  = G_Tasks('PRI_TASK',TASKS_DF.values, SERVERS_DF, VMS_DF, DEFAULT_SERVER)
+    exec_tasks(TASKS, 'INITIALIZATION')
+    
+    print("AVZ tables...")
+    AVZ_TABLES = {_node:TASKS.get_scheduler(_node).get_status_by_avz()  for _node in TASKS.nodes() if _node != 'ROOT'}
+    for k,v in AVZ_TABLES.items():
+        v['utilization'] = v['utilization'].apply(lambda x: "%0.0f%%"%(100*x)) 
+            
+    print("Creating Server tables...")
+    SERVERS_TABLES = {_node:TASKS.get_scheduler(_node).get_servers_status()  for _node in TASKS.nodes() if _node != 'ROOT'}
+    for k,v in SERVERS_TABLES.items():
+        v.loc[:,['id','memory','server_type','vcpus','vcpus_free','vcpus_reserved','vcpus_system','vms']] = v.loc[:,['id','memory','server_type','vcpus','vcpus_free','vcpus_reserved','vcpus_system','vms']].astype(int)
+
+    print("Creating VMs tables...")
+    VMS_TABLES = {_node:TASKS.get_scheduler(_node).get_vms_status()  for _node in TASKS.nodes() if _node != 'ROOT'}
+    for k,v in VMS_TABLES.items():
+        v.loc[:,['vcpus','memory']] = v.loc[:,['vcpus','memory']].astype(int) 
+    
+    
+    
+    fffffffffffffffffff
+
+
+# In[ ]:
 
 
 parser = argparse.ArgumentParser(description='Processor of Template - NFVI Report')
@@ -325,7 +329,6 @@ DIR_TEMPLATE = '/usr/app/template/'
 
 if __name__ == '__main__':
     
-    print(sys.argv)
     args = parser.parse_args()
     
     file_path = DIR_TEMPLATE + args.file
@@ -425,6 +428,12 @@ if __name__ == '__main__':
 
     with open(_file_out, 'w') as outfile:
         json.dump(dict(SAVE_DATA), outfile)
+
+
+# In[ ]:
+
+
+
 
 
 # In[ ]:

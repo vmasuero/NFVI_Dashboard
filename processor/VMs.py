@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[1]:
@@ -62,22 +62,10 @@ class VM:
             'affinity': self.affinity,
             'antiaffinity': self.antiaffinity,
             'id': int(self.id),
-            'server_cluster_id': self.server_deployed.id if self.server_deployed else None
+            'server_cluster_id': int(self.server_deployed.id) if self.server_deployed else None
         }])
     
     def get_copy(self):
         return VM(self.name, self.component, self.vnf, self.flavor, self.avz, self.datacenter, self.node_select, self.affinity, self.antiaffinity)
     
-if False:
-    FLAVORS_VM = []
-    FLAVORS_VM.append(Flavor_VM(99, 40, 2048))
-    
-    display(FLAVORS_VM[0].get_info())
-    
-    V1 = VM('vm_1','comp','vnf', FLAVORS_VM[0], avz='avz', datacenter='ESB')#.get_copy()
-    V1_b = V1.get_copy()
-    V1_b.name = 'copia'
-    display(V1.get_info())
-    display(V1_b.get_info())
-    fffffffff
 
