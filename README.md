@@ -6,10 +6,10 @@ The Template File must be in the same local Diretory as the execution of the Con
 
 ```
 For Linux:
-	docker run -v $(pwd):/usr/app/template vmasuero/nfvi_processor:1.0 <file>.xlsx
+	docker run -v $(pwd):/usr/app/template vmasuero/nfvi_processor:1.2 <file>.xlsx
 
 For Windows:
-	docker run -v %cd%:/usr/app/template vmasuero/nfvi_processor:1.0 <file>.xlsx
+	docker run -v %cd%:/usr/app/template vmasuero/nfvi_processor:1.2 <file>.xlsx
 ```
 
 
